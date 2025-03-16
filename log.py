@@ -1,21 +1,33 @@
 #!/usr/bin/python3
 import socket
 import sys
+import hashlib
+import itertools
+import string
+
+def generate_proof_of_work(message):
+    message = " ".join(message.split()) 
+    chars = string.ascii_letters + string.digits 
+    
+    for length in range(1, 6):
+        for proof in ("".join(p) for p in itertools.product(chars, repeat=length)):
+            test_string = proof + ":" + message
+            hash_result = hashlib.sha256(test_string.encode()).hexdigest()
+            if hash_result[:6] == "000000": 
+                return proof + ":" + message
+    
+    raise ValueError("Proof-of-work not found within reasonable limits")
 
 def send_string_to_server(port, message):
     try:
         # Connect to the server
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect(('localhost', port))
+        pow_message = generate_proof_of_work(message)  
 
-        ######################
-        ### Convert any whitespace to spaces
-        ### Modify the messsage to include the proof-of-work (Pow+':'+message)
-        ######################
 
         with client_socket.makefile('r') as server_in, client_socket.makefile('w') as server_out:
-            # Send the message to the server, terminated by a newline
-            server_out.write(message + "\n")
+            server_out.write(pow_message + "\n")
             server_out.flush()
 
             # Receive and print the confirmation message from the server

@@ -1,5 +1,14 @@
 #!/usr/bin/python3
 import socket
+import hashlib
+import base64
+import os
+from datetime import datetime, timezone
+
+def compute_hash(log_entry):
+    hash_obj = hashlib.sha256(log_entry.encode('utf-8'))
+    hash_b64 = base64.b64encode(hash_obj.digest()).decode('utf-8')
+    return hash_b64[-24:]
 
 def handle_client(client_socket):
     try:
@@ -7,21 +16,42 @@ def handle_client(client_socket):
             message = client_in.readline().strip()
             print(f"Received: {message}")
 
+            if not message:
+                client_out.write("error: Empty message\n")
+                client_out.flush()
+                return
 
-            ########## YOUR CODE HERE ############
-            ### Validate the the PoW in the message
-            ### Stril the PoW from the message
-            ### Read the last hash from loghead.txt
-            ### Create the full line for the log entry
-            ### Compute its hash
-            ### Append the line to the log
-            ### Update loghead.txt
-            ### Add error checking
-            #######################################
+
+            loghead_path = "loghead.txt"
+            log_path = "log.txt"
+            
+            if not os.path.exists(loghead_path) and not os.path.exists(log_path):
+                last_hash = "start"
+                with open(loghead_path, "w") as loghead_file:
+                    loghead_file.write(last_hash)
+            elif os.path.exists(loghead_path):
+                with open(loghead_path, "r") as f:
+                    last_hash = f.read().strip()
+                if not last_hash:
+                    client_out.write("error: Missing head pointer\n")
+                    client_out.flush()
+                    return
+            else:
+                client_out.write("error: Missing head pointer but log exists\n")
+                client_out.flush()
+                return
+            
+            timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            log_entry = f"{timestamp} - {last_hash} {message}"
+            new_hash = compute_hash(log_entry)
+
+            
 
             # Append the received string to log.txt
-            with open("log.txt", "a") as log_file:
-                log_file.write(message + "\n")
+            with open(log_path, "a") as log_file:
+                log_file.write(log_entry + "\n")
+            with open(loghead_path, "w") as loghead_file:
+                loghead_file.write(new_hash)
 
             # Send a response message back to the client (terminated by a newline)
             response = "ok\n"
